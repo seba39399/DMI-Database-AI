@@ -1,6 +1,5 @@
 name: Club Noel DMI - CI Pipeline
 
-# Trigger the pipeline on pushes or pull requests to main/develop branches
 on:
   push:
     branches:
@@ -11,7 +10,6 @@ on:
       - main
 
 jobs:
-  # Backend Integration Tests
   test-backend:
     runs-on: ubuntu-latest
     defaults:
@@ -26,15 +24,14 @@ jobs:
           python-version: "3.12"
 
       - name: Install uv
-        run: pip install uv
+        uses: astral-sh/setup-uv@v3
 
       - name: Install dependencies
-        run: uv pip install --system -r pyproject.toml
+        run: uv sync --all-extras
 
       - name: Run Pytest
-        run: pytest -v
+        run: uv run pytest -v
 
-  # Frontend Integration Tests (Vitest)
   test-frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -54,7 +51,6 @@ jobs:
       - name: Run Vitest
         run: npx vitest run
 
-  # Docker Image Build Verification
   docker-build:
     needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
