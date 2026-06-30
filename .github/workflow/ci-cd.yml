@@ -11,7 +11,7 @@ on:
       - main
 
 jobs:
-  # 1. Backend Integration Tests
+  # Backend Integration Tests
   test-backend:
     runs-on: ubuntu-latest
     defaults:
@@ -34,7 +34,7 @@ jobs:
       - name: Run Pytest
         run: pytest -v
 
-  # 2. Frontend Integration Tests (Vitest)
+  # Frontend Integration Tests (Vitest)
   test-frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -54,7 +54,7 @@ jobs:
       - name: Run Vitest
         run: npx vitest run
 
-  # 3. Docker Image Build Verification
+  # Docker Image Build Verification
   docker-build:
     needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
