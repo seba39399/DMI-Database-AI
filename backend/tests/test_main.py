@@ -1,14 +1,60 @@
+import pytest
 from fastapi.testclient import TestClient
-from main import app
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
-client = TestClient(app)
+from main import app
+from database import Base, get_db  # Importa Base y get_db de tu configuración de SQLAlchemy
+
+# ==============================================================================
+# CONFIGURACIÓN DE BASE DE DATOS ISOLADA PARA PRUEBAS (SQLITE IN-MEMORY)
+# ==============================================================================
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def setup_db():
+    """
+    Crea las tablas antes de CADA prueba y las elimina inmediatamente después.
+    Garantiza aislamiento total y previene 'UNIQUE constraint failed'.
+    """
+    Base.metadata.create_all(bind=engine)
+    yield
+    Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture
+def client(setup_db):
+    """
+    Inyecta la sesión de pruebas en FastAPI reemplazando la dependencia get_db.
+    """
+    def override_get_db():
+        db = TestingSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
 
 # ==============================================================================
 # 1. READ / QUERY TEST SUITES
 # ==============================================================================
 
 
-def test_01_read_implant_cards_success():
+def test_01_read_implant_cards_success(client):
     """
     Ensure the main GET endpoint responds with HTTP 200 and yields a structured array list.
     """
@@ -22,7 +68,7 @@ def test_01_read_implant_cards_success():
 # ==============================================================================
 
 
-def test_02_create_class_iii_pacemaker_device():
+def test_02_create_class_iii_pacemaker_device(client):
     """
     Ensure cardiac pacemaker terms are correctly intercepted and classified as Class III (High Risk).
     """
@@ -41,7 +87,7 @@ def test_02_create_class_iii_pacemaker_device():
     assert response.json()["risk_class"] == "Class III"
 
 
-def test_03_create_class_iii_heart_valve_device():
+def test_03_create_class_iii_heart_valve_device(client):
     """
     Ensure biological heart valves route securely into Class III classification.
     """
@@ -60,7 +106,7 @@ def test_03_create_class_iii_heart_valve_device():
     assert response.json()["risk_class"] == "Class III"
 
 
-def test_04_create_class_iib_trauma_screw_device():
+def test_04_create_class_iib_trauma_screw_device(client):
     """
     Ensure orthopedic trauma screws map accurately to Class IIb (High-Medium Risk).
     """
@@ -79,7 +125,7 @@ def test_04_create_class_iib_trauma_screw_device():
     assert response.json()["risk_class"] == "Class IIb"
 
 
-def test_05_create_class_iib_fixation_plate_device():
+def test_05_create_class_iib_fixation_plate_device(client):
     """
     Ensure orthopedic reconstruction bone plates map to Class IIb.
     """
@@ -98,7 +144,7 @@ def test_05_create_class_iib_fixation_plate_device():
     assert response.json()["risk_class"] == "Class IIb"
 
 
-def test_06_create_class_iia_ophthalmic_lens_device():
+def test_06_create_class_iia_ophthalmic_lens_device(client):
     """
     Ensure ophthalmic/intraocular lenses map correctly to Class IIa (Medium-Low Risk).
     """
@@ -117,7 +163,7 @@ def test_06_create_class_iia_ophthalmic_lens_device():
     assert response.json()["risk_class"] == "Class IIa"
 
 
-def test_07_create_class_iia_surgical_suture_device():
+def test_07_create_class_iia_surgical_suture_device(client):
     """
     Ensure surgical sutures map to Class IIa risk tier.
     """
@@ -136,7 +182,7 @@ def test_07_create_class_iia_surgical_suture_device():
     assert response.json()["risk_class"] == "Class IIa"
 
 
-def test_08_create_class_i_generic_device():
+def test_08_create_class_i_generic_device(client):
     """
     Ensure low-risk devices with no structural matches fall back cleanly to Class I (Low Risk).
     """
@@ -160,7 +206,7 @@ def test_08_create_class_i_generic_device():
 # ==============================================================================
 
 
-def test_09_create_validation_error_missing_implant_name():
+def test_09_create_validation_error_missing_implant_name(client):
     """
     Validate that omitting the mandatory 'implant_name' field aborts transaction with HTTP 422.
     """
@@ -176,7 +222,7 @@ def test_09_create_validation_error_missing_implant_name():
     assert response.status_code == 422
 
 
-def test_10_create_validation_error_missing_implant_code():
+def test_10_create_validation_error_missing_implant_code(client):
     """
     Validate that omitting the mandatory 'implant_code' serial field triggers HTTP 422.
     """
@@ -192,7 +238,7 @@ def test_10_create_validation_error_missing_implant_code():
     assert response.status_code == 422
 
 
-def test_11_create_validation_error_missing_sanitary_registration():
+def test_11_create_validation_error_missing_sanitary_registration(client):
     """
     Validate that omitting the mandatory 'sanitary_registration' (INVIMA) yields HTTP 422.
     """
@@ -208,7 +254,7 @@ def test_11_create_validation_error_missing_sanitary_registration():
     assert response.status_code == 422
 
 
-def test_12_create_validation_error_invalid_date_format():
+def test_12_create_validation_error_invalid_date_format(client):
     """
     Validate that passing an incorrect date format string triggers FastAPI Pydantic schema rejection.
     """
@@ -225,7 +271,7 @@ def test_12_create_validation_error_invalid_date_format():
     assert response.status_code == 422
 
 
-def test_13_create_validation_error_empty_json_body():
+def test_13_create_validation_error_empty_json_body(client):
     """
     Validate sending an empty dictionary payload triggers validation errors.
     """
@@ -238,7 +284,7 @@ def test_13_create_validation_error_empty_json_body():
 # ==============================================================================
 
 
-def test_14_cors_preflight_handshake_approval():
+def test_14_cors_preflight_handshake_approval(client):
     """
     Ensure CORS preflight OPTIONS request approves critical cross-origin operations.
     """
@@ -253,7 +299,7 @@ def test_14_cors_preflight_handshake_approval():
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
 
 
-def test_15_case_insensitive_classification_matching():
+def test_15_case_insensitive_classification_matching(client):
     """
     Validate that uppercase mixed terms like 'MaRcApAsOs' trigger standard cardiac Class III classifications.
     """
@@ -272,7 +318,7 @@ def test_15_case_insensitive_classification_matching():
     assert response.json()["risk_class"] == "Class III"
 
 
-def test_16_non_existent_route_gives_404():
+def test_16_non_existent_route_gives_404(client):
     """
     Validate that querying arbitrary paths yields a clean HTTP 404 response.
     """
