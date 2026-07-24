@@ -63,4 +63,4 @@ jobs:
         run: docker build -f ./backend/Dockerfile -t clubnoel-backend .
 
       - name: Build Frontend Docker Image
-        run: docker build -f ./frontend/Dockerfile -t clubnoel-frontend .
+        run: docker build -t clubnoel-frontend ./frontend
