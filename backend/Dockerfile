@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Copy dependency files to leverage Docker layer caching
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock* ./
 
 # Install dependencies directly into the Docker system environment quickly
 RUN uv pip install --system -r pyproject.toml
