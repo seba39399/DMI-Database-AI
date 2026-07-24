@@ -4,7 +4,7 @@ from sqlmodel import SQLModel, Session, create_engine
 from sqlmodel.pool import StaticPool
 
 from main import app
-from database import get_db
+from database import get_session
 
 # ==============================================================================
 # CONFIGURACIÓN DE BASE DE DATOS AISLADA PARA PRUEBAS (SQLITE IN-MEMORY)
@@ -32,13 +32,13 @@ def setup_db():
 @pytest.fixture
 def client(setup_db):
     """
-    Inyecta la sesión de pruebas en RAM dentro de FastAPI sobreescribiendo get_db.
+    Inyecta la sesión de pruebas en RAM dentro de FastAPI sobreescribiendo get_session.
     """
-    def override_get_db():
+    def override_get_session():
         with Session(engine) as session:
             yield session
 
-    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_session] = override_get_session
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
