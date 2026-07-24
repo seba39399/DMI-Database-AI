@@ -1,14 +1,13 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel.pool import StaticPool
 
 from main import app
-from database import Base, get_db  # Importa Base y get_db de tu configuración de SQLAlchemy
+from database import get_db
 
 # ==============================================================================
-# CONFIGURACIÓN DE BASE DE DATOS ISOLADA PARA PRUEBAS (SQLITE IN-MEMORY)
+# CONFIGURACIÓN DE BASE DE DATOS AISLADA PARA PRUEBAS (SQLITE IN-MEMORY)
 # ==============================================================================
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
@@ -17,31 +16,27 @@ engine = create_engine(
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
 )
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 @pytest.fixture(autouse=True)
 def setup_db():
     """
-    Crea las tablas antes de CADA prueba y las elimina inmediatamente después.
-    Garantiza aislamiento total y previene 'UNIQUE constraint failed'.
+    Crea las tablas de SQLModel antes de CADA prueba y las destruye al finalizar.
+    Garantiza aislamiento total para evitar errores de restricción UNIQUE.
     """
-    Base.metadata.create_all(bind=engine)
+    SQLModel.metadata.create_all(engine)
     yield
-    Base.metadata.drop_all(bind=engine)
+    SQLModel.metadata.drop_all(engine)
 
 
 @pytest.fixture
 def client(setup_db):
     """
-    Inyecta la sesión de pruebas en FastAPI reemplazando la dependencia get_db.
+    Inyecta la sesión de pruebas en RAM dentro de FastAPI sobreescribiendo get_db.
     """
     def override_get_db():
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
+        with Session(engine) as session:
+            yield session
 
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
