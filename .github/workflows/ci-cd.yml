@@ -57,8 +57,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Usamos el contexto raíz (.) para que Docker acceda a pyproject.toml y uv.lock
+      # Apuntamos explícitamente a tu Dockerfile en backend (si se llama Dockerfile o dockerfile.backend)
       - name: Build Backend Docker Image
-        run: docker build -t clubnoel-backend ./backend
+        run: docker build -f ./backend/Dockerfile -t clubnoel-backend .
 
       - name: Build Frontend Docker Image
-        run: docker build -t clubnoel-frontend ./frontend
+        run: docker build -f ./frontend/Dockerfile -t clubnoel-frontend .
