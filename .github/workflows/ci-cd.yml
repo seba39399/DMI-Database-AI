@@ -51,16 +51,37 @@ jobs:
       - name: Run Vitest
         run: npx vitest run
 
-  docker-build:
+  docker-build-push:
     needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Usamos el contexto raíz (.) para que Docker acceda a pyproject.toml y uv.lock
-      # Apuntamos explícitamente a tu Dockerfile en backend (si se llama Dockerfile o dockerfile.backend)
-      - name: Build Backend Docker Image
-        run: docker build -f ./backend/Dockerfile -t clubnoel-backend .
+      # 1. Configurar QEMU y Docker Buildx (para caché optimizado y builds rápidos)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build Frontend Docker Image
-        run: docker build -t clubnoel-frontend ./frontend
+      # 2. Iniciar sesión en Docker Hub
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 3. Build y Push de la imagen del Backend
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' }} # Hace push solo si es un evento en 'main'
+          tags: ${{ secrets.DOCKER_USERNAME }}/clubnoel-backend:latest
+
+      # 4. Build y Push de la imagen del Frontend
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' }} # Hace push solo si es un evento en 'main'
+          tags: ${{ secrets.DOCKER_USERNAME }}/clubnoel-frontend:latest
