@@ -68,16 +68,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 3. Build y Push de la imagen del Backend
+      # 3. Build y Push de la imagen del Backend (Contexto en la raíz por pyproject.toml y uv.lock)
       - name: Build and Push Backend Image
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
+          context: .
           file: ./backend/Dockerfile
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/clubnoel-backend:latest
 
-      # 4. Build y Push de la imagen del Frontend
+      # 4. Build y Push de la imagen del Frontend (Contexto dentro de ./frontend)
       - name: Build and Push Frontend Image
         uses: docker/build-push-action@v5
         with:

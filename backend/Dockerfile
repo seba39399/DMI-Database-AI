@@ -26,8 +26,8 @@ COPY pyproject.toml uv.lock* ./
 # Install dependencies directly into the Docker system environment quickly
 RUN uv pip install --system -r pyproject.toml
 
-# Copy the rest of the backend codebase into the container
-COPY . .
+# Copy ONLY the backend codebase into the container
+COPY backend/ .
 
 # Expose the port FastAPI will listen on
 EXPOSE 8000
