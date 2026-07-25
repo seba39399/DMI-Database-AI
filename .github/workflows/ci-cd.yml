@@ -43,7 +43,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install dependencies
         run: npm ci
@@ -57,7 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 1. Configurar QEMU y Docker Buildx (para caché optimizado y builds rápidos)
+      # 1. Configurar QEMU y Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -65,7 +65,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # 3. Build y Push de la imagen del Backend
@@ -74,8 +74,8 @@ jobs:
         with:
           context: ./backend
           file: ./backend/Dockerfile
-          push: ${{ github.ref == 'refs/heads/main' }} # Hace push solo si es un evento en 'main'
-          tags: ${{ secrets.DOCKER_USERNAME }}/clubnoel-backend:latest
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/clubnoel-backend:latest
 
       # 4. Build y Push de la imagen del Frontend
       - name: Build and Push Frontend Image
@@ -83,5 +83,5 @@ jobs:
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
-          push: ${{ github.ref == 'refs/heads/main' }} # Hace push solo si es un evento en 'main'
-          tags: ${{ secrets.DOCKER_USERNAME }}/clubnoel-frontend:latest
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/clubnoel-frontend:latest
