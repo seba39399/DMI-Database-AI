@@ -36,5 +36,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8000/api/v1/implant-cards || exit 1
 
-# Default command to start the production server with Uvicorn
+# Default command to start the production server with Uvicorn environment variables for host and port
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
