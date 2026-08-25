@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudFormation Template for Club Noel DMI Infrastructure (Frontend S3+CloudFront, Backend AppRunner)"
+
+Parameters:
+  BackendImageIdentifier:
+    Type: String
+    Default: "public.ecr.aws/aws-containers/hello-app-runner:latest"
+    Description: "Identificador de la imagen en ECR Public (ej: public.ecr.aws/tu-alias/clubnoel-backend:latest)"
+
+Resources:
+  # ============================================================================
+  # FRONTEND INFRASTRUCTURE (S3 + CloudFront CDN)
+  # ============================================================================
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "clubnoel-frontend-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  FrontendOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "ClubNoelFrontendOAC-${AWS::AccountId}"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipal
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${FrontendBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${FrontendDistribution}"
+
+  FrontendDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt FrontendOAC.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponsePagePath: /index.html
+            ResponseCode: 200
+
+  # ============================================================================
+  # BACKEND INFRASTRUCTURE (AWS App Runner FastAPI)
+  # ============================================================================
+  BackendAppRunnerService:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: clubnoel-backend-service
+      SourceConfiguration:
+        AutoDeploymentsEnabled: false
+        ImageRepository:
+          ImageIdentifier: !Ref BackendImageIdentifier
+          ImageRepositoryType: ECR_PUBLIC
+          ImageConfiguration:
+            Port: "8000"
+            RuntimeEnvironmentVariables:
+              - Name: PORT
+                Value: "8000"
+
+Outputs:
+  FrontendBucketName:
+    Description: "Nombre del Bucket S3 para el Frontend"
+    Value: !Ref FrontendBucket
+
+  FrontendDistributionId:
+    Description: "ID de la distribución de CloudFront"
+    Value: !Ref FrontendDistribution
+
+  FrontendURL:
+    Description: "URL pública del Frontend"
+    Value: !GetAtt FrontendDistribution.DomainName
+
+  BackendURL:
+    Description: "URL pública de AWS App Runner (FastAPI)"
+    Value: !GetAtt BackendAppRunnerService.ServiceUrl

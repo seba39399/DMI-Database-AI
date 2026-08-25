@@ -1,4 +1,4 @@
-name: Club Noel DMI - CI Pipeline
+name: Club Noel DMI - CI/CD Pipeline
 
 on:
   push:
@@ -51,37 +51,77 @@ jobs:
       - name: Run Vitest
         run: npx vitest run
 
-  docker-build-push:
+  deploy-backend:
     needs: [test-backend, test-frontend]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # 1. Configurar QEMU y Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 2. Iniciar sesión en Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 3. Build y Push de la imagen del Backend (Contexto en la raíz por pyproject.toml y uv.lock)
       - name: Build and Push Backend Image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./backend/Dockerfile
-          push: ${{ github.ref == 'refs/heads/main' }}
+          push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/clubnoel-backend:latest
 
-      # 4. Build y Push de la imagen del Frontend (Contexto dentro de ./frontend)
-      - name: Build and Push Frontend Image
-        uses: docker/build-push-action@v5
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: ${{ github.ref == 'refs/heads/main' }}
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/clubnoel-frontend:latest
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy to AWS App Runner
+        run: |
+          SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='clubnoel-backend-service'].ServiceArn" --output text)
+          if [ -n "$SERVICE_ARN" ]; then
+            aws apprunner start-deployment --service-arn $SERVICE_ARN
+          fi
+
+  deploy-frontend:
+    needs: [test-frontend]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Frontend
+        run: npm run build
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy to S3 and Invalidate CloudFront
+        run: |
+          STACK_OUTPUTS=$(aws cloudformation describe-stacks --stack-name clubnoel-dmi-stack --query "Stacks[0].Outputs")
+          BUCKET_NAME=$(echo $STACK_OUTPUTS | jq -r '.[] | select(.OutputKey=="FrontendBucketName") | .OutputValue')
+          DISTRIBUTION_ID=$(echo $STACK_OUTPUTS | jq -r '.[] | select(.OutputKey=="FrontendDistributionId") | .OutputValue')
+
+          aws s3 sync dist/ s3://$BUCKET_NAME --delete
+          aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
