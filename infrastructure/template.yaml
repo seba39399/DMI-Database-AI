@@ -1,11 +1,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "CloudFormation Template for Club Noel DMI Infrastructure (Frontend S3+CloudFront, Backend AppRunner)"
+Description: "CloudFormation Template for Club Noel DMI Infrastructure (Frontend S3+CloudFront, Backend AppRunner, RDS Postgres)"
 
 Parameters:
   BackendImageIdentifier:
     Type: String
     Default: "public.ecr.aws/aws-containers/hello-app-runner:latest"
-    Description: "Identificador de la imagen en ECR Public (ej: public.ecr.aws/tu-alias/clubnoel-backend:latest)"
+    Description: "Public ECR image identifier"
 
 Resources:
   # ============================================================================
@@ -73,10 +73,39 @@ Resources:
             ResponseCode: 200
 
   # ============================================================================
-  # BACKEND INFRASTRUCTURE (AWS App Runner FastAPI)
+  # DATABASE INFRASTRUCTURE (AWS RDS PostgreSQL)
+  # ============================================================================
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow inbound access to PostgreSQL from App Runner"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0
+
+  AppRunnerDatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: clubnoel-db
+      AllocatedStorage: "20"
+      DBInstanceClass: db.t4g.micro
+      Engine: postgres
+      MasterUsername: postgres
+      MasterUserPassword: "ClubNoelSecurePassword2026!"
+      DBName: clubnoel_dmi
+      VPCSecurityGroups:
+        - !GetAtt DatabaseSecurityGroup.GroupId
+      PubliclyAccessible: true
+
+  # ============================================================================
+  # BACKEND INFRASTRUCTURE (AWS App Runner for FastAPI)
   # ============================================================================
   BackendAppRunnerService:
     Type: AWS::AppRunner::Service
+    DependsOn: AppRunnerDatabaseInstance
     Properties:
       ServiceName: clubnoel-backend-service
       SourceConfiguration:
@@ -89,20 +118,34 @@ Resources:
             RuntimeEnvironmentVariables:
               - Name: PORT
                 Value: "8000"
+              - Name: DB_HOST
+                Value: !GetAtt AppRunnerDatabaseInstance.Endpoint.Address
+              - Name: DB_PORT
+                Value: !GetAtt AppRunnerDatabaseInstance.Endpoint.Port
+              - Name: DB_NAME
+                Value: "clubnoel_dmi"
+              - Name: DB_USER
+                Value: "postgres"
+              - Name: DB_PASSWORD
+                Value: "ClubNoelSecurePassword2026!"
 
 Outputs:
   FrontendBucketName:
-    Description: "Nombre del Bucket S3 para el Frontend"
+    Description: "S3 Bucket name for Frontend"
     Value: !Ref FrontendBucket
 
   FrontendDistributionId:
-    Description: "ID de la distribución de CloudFront"
+    Description: "CloudFront Distribution ID"
     Value: !Ref FrontendDistribution
 
   FrontendURL:
-    Description: "URL pública del Frontend"
+    Description: "Public Frontend URL"
     Value: !GetAtt FrontendDistribution.DomainName
 
   BackendURL:
-    Description: "URL pública de AWS App Runner (FastAPI)"
+    Description: "Public AWS App Runner URL (FastAPI)"
     Value: !GetAtt BackendAppRunnerService.ServiceUrl
+
+  DatabaseEndpoint:
+    Description: "PostgreSQL RDS Endpoint"
+    Value: !GetAtt AppRunnerDatabaseInstance.Endpoint.Address
