@@ -1,36 +1,49 @@
-from fastapi import FastAPI, status, Depends
-from sqlmodel import Session, select
+import os
+from contextlib import asynccontextmanager
 from typing import List
+from fastapi import FastAPI, status, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import Session, select
 
 from models import ImplantCard, ImplantCardCreate, ImplantCardResponse
 from classifier import predict_risk_class
 from database import create_db_and_tables, get_session
-from fastapi.middleware.cors import CORSMiddleware
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Triggers database and tables generation on service deployment launch."""
+    create_db_and_tables()
+    yield
+
 
 app = FastAPI(
     title="Club Noel - IMD Tracking & AI Classification System",
     description="Backend API designed for secure SQL storage and AI-powered risk tiering of Implantable Medical Devices.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
+# CORS configuration supporting Localhost and AWS CloudFront Distribution
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://d2rat1iexnulhe.cloudfront.net",
 ]
+
+# Allow dynamic origin fallback if FRONTEND_URL environment variable is provided
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url and frontend_url not in origins:
+    origins.append(frontend_url)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https://.*\.cloudfront\.net",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def on_startup():
-    """Triggers database and tables generation on service deployment launch."""
-    create_db_and_tables()
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)
