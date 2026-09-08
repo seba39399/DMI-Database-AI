@@ -78,7 +78,7 @@ jobs:
           REPOSITORY: clubnoel-backend
           IMAGE_TAG: latest
         run: |
-          docker build -f ./backend/Dockerfile -t $REGISTRY/$REPOSITORY:$IMAGE_TAG ./backend
+          docker build -f backend/Dockerfile -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
 
       - name: Deploy to AWS App Runner
         run: |
