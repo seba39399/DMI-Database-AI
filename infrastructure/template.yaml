@@ -1,11 +1,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "CloudFormation Template for Club Noel DMI Infrastructure (Frontend S3+CloudFront, Backend AppRunner, RDS Postgres)"
+Description: "CloudFormation Template for Club Noel DMI Infrastructure - v1.0.1"
 
 Parameters:
   BackendImageIdentifier:
     Type: String
     Default: "public.ecr.aws/aws-containers/hello-app-runner:latest"
-    Description: "Public ECR image identifier"
+    Description: "Public ECR image identifier for Backend"
 
 Resources:
   # ============================================================================
@@ -101,7 +101,7 @@ Resources:
       PubliclyAccessible: true
 
   # ============================================================================
-  # BACKEND INFRASTRUCTURE (AWS App Runner for FastAPI)
+  # BACKEND INFRASTRUCTURE (AWS App Runner via ECR Public)
   # ============================================================================
   BackendAppRunnerService:
     Type: AWS::AppRunner::Service
