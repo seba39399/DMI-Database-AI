@@ -1,0 +1,17 @@
+{
+    "ImageRepository":  {
+                            "ImageIdentifier":  "615296308634.dkr.ecr.us-east-1.amazonaws.com/clubnoel-backend:latest",
+                            "ImageConfiguration":  {
+                                                       "RuntimeEnvironmentVariables":  {
+                                                                                           "PORT":  "8000",
+                                                                                           "DB_PORT":  "5432",
+                                                                                           "DB_NAME":  "clubnoel_dmi",
+                                                                                           "DB_HOST":  "clubnoel-db.cyzaykg4uhpx.us-east-1.rds.amazonaws.com",
+                                                                                           "DB_USER":  "postgres",
+                                                                                           "DB_PASSWORD":  "ClubNoelSecurePassword2026!"
+                                                                                       },
+                                                       "Port":  "8000"
+                                                   },
+                            "ImageRepositoryType":  "ECR"
+                        }
+}

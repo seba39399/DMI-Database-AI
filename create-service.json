@@ -1,0 +1,21 @@
+{
+  "AuthenticationConfiguration": {
+    "AccessRoleArn": "arn:aws:iam::615296308634:role/service-role/AppRunnerECRAccessRole"
+  },
+  "AutoDeploymentsEnabled": true,
+  "ImageRepository": {
+    "ImageIdentifier": "615296308634.dkr.ecr.us-east-1.amazonaws.com/clubnoel-backend:latest",
+    "ImageRepositoryType": "ECR",
+    "ImageConfiguration": {
+      "Port": "8000",
+      "RuntimeEnvironmentVariables": {
+        "DB_HOST": "clubnoel-db.cyzaykg4uhpx.us-east-1.rds.amazonaws.com",
+        "DB_NAME": "clubnoel_dmi",
+        "DB_PASSWORD": "ClubNoelSecurePassword2026!",
+        "DB_PORT": "5432",
+        "DB_USER": "postgres",
+        "PORT": "8000"
+      }
+    }
+  }
+}
