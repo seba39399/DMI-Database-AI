@@ -12,8 +12,12 @@ from database import create_db_and_tables, get_session
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Triggers database and tables generation on service deployment launch."""
-    create_db_and_tables()
+    """Triggers database and tables generation safely on service startup."""
+    try:
+        create_db_and_tables()
+        print("¡Base de datos inicializada con éxito!")
+    except Exception as e:
+        print(f"Advertencia: No se pudo conectar a la BD al iniciar: {e}")
     yield
 
 
