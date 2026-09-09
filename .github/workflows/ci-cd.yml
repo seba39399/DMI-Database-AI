@@ -99,8 +99,25 @@ jobs:
             aws apprunner resume-service --service-arn $SERVICE_ARN
           fi
 
-          # 2. Disparar el despliegue directo sin bucles restrictivos innecesarios
-          echo "Iniciando despliegue en App Runner..."
+          # 2. Esperar pacientemente a que el servicio esté en estado RUNNING
+          echo "Esperando a que el servicio esté listo (RUNNING)..."
+          while true; do
+            CURRENT_STATUS=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.Status" --output text)
+            echo "Estado actual del servicio: $CURRENT_STATUS"
+            
+            if [ "$CURRENT_STATUS" == "RUNNING" ]; then
+              echo "¡El servicio ya está activo!"
+              break
+            elif [ "$CURRENT_STATUS" == "CREATE_FAILED" ] || [ "$CURRENT_STATUS" == "OPERATION_FAILED" ]; then
+              echo "Error crítico: El servicio falló durante su creación."
+              exit 1
+            fi
+            
+            sleep 15
+          done
+
+          # 3. Disparar el despliegue ahora que ya está operativo
+          echo "Iniciando despliegue de la nueva imagen en App Runner..."
           aws apprunner start-deployment --service-arn $SERVICE_ARN
           echo "¡Despliegue disparado con éxito hacia ECR!"
 
