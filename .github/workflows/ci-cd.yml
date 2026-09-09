@@ -86,40 +86,67 @@ jobs:
           SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='clubnoel-backend-service'].ServiceArn" --output text)
 
           if [ -z "$SERVICE_ARN" ] || [ "$SERVICE_ARN" == "None" ]; then
-            echo "Error: No se encontró el servicio App Runner 'clubnoel-backend-service'."
-            exit 1
+            echo "El servicio no existe. Creándolo por primera vez en App Runner..."
+            
+            # Crear el servicio nuevo apuntando a la imagen en ECR y configurando variables de entorno de RDS
+            CREATE_OUTPUT=$(aws apprunner create-service \
+              --service-name clubnoel-backend-service \
+              --source-configuration '{
+                "AuthenticationConfiguration": {
+                  "AccessRoleArn": "arn:aws:iam::615296308634:role/service-role/AppRunnerECRAccessRole"
+                },
+                "AutoDeploymentsEnabled": true,
+                "ImageRepository": {
+                  "ImageIdentifier": "615296308634.dkr.ecr.us-east-1.amazonaws.com/clubnoel-backend:latest",
+                  "ImageRepositoryType": "ECR",
+                  "ImageConfiguration": {
+                    "Port": "8000",
+                    "RuntimeEnvironmentVariables": {
+                      "PORT": "8000",
+                      "DB_HOST": "clubnoel-db.cyzaykg4uhpx.us-east-1.rds.amazonaws.com",
+                      "DB_NAME": "clubnoel_dmi",
+                      "DB_USER": "postgres",
+                      "DB_PASSWORD": "ClubNoelSecurePassword2026!"
+                    }
+                  }
+                }
+              }' \
+              --instance-configuration '{"Cpu": "1024", "Memory": "2048"}' \
+              --health-check-configuration '{"Protocol": "HTTP", "Path": "/health", "Interval": 10, "Timeout": 5, "HealthyThreshold": 1, "UnhealthyThreshold": 5}')
+
+            SERVICE_ARN=$(echo $CREATE_OUTPUT | jq -r '.Service.ServiceArn')
+            echo "¡Servicio creado exitosamente con ARN: $SERVICE_ARN!"
+          else
+            echo "Servicio detectado con ARN: $SERVICE_ARN"
+            
+            # 1. Si está en estado PAUSED, reanudar
+            STATUS=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.Status" --output text)
+            if [ "$STATUS" == "PAUSED" ]; then
+              echo "El servicio está pausado. Reanudando..."
+              aws apprunner resume-service --service-arn $SERVICE_ARN
+            fi
+
+            # 2. Disparar el despliegue de la nueva imagen
+            echo "Iniciando despliegue de la nueva imagen en App Runner..."
+            aws apprunner start-deployment --service-arn $SERVICE_ARN
           fi
 
-          echo "Servicio detectado con ARN: $SERVICE_ARN"
-
-          # 1. Si está en estado PAUSED, reanudar
-          STATUS=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.Status" --output text)
-          if [ "$STATUS" == "PAUSED" ]; then
-            echo "El servicio está pausado. Reanudando..."
-            aws apprunner resume-service --service-arn $SERVICE_ARN
-          fi
-
-          # 2. Esperar pacientemente a que el servicio esté en estado RUNNING
+          # 3. Esperar pacientemente a que el servicio esté en estado RUNNING
           echo "Esperando a que el servicio esté listo (RUNNING)..."
           while true; do
             CURRENT_STATUS=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.Status" --output text)
             echo "Estado actual del servicio: $CURRENT_STATUS"
             
             if [ "$CURRENT_STATUS" == "RUNNING" ]; then
-              echo "¡El servicio ya está activo!"
+              echo "¡El servicio ya está activo y operando con éxito!"
               break
             elif [ "$CURRENT_STATUS" == "CREATE_FAILED" ] || [ "$CURRENT_STATUS" == "OPERATION_FAILED" ]; then
-              echo "Error crítico: El servicio falló durante su creación."
+              echo "Error crítico: El servicio falló durante su despliegue."
               exit 1
             fi
             
             sleep 15
           done
-
-          # 3. Disparar el despliegue ahora que ya está operativo
-          echo "Iniciando despliegue de la nueva imagen en App Runner..."
-          aws apprunner start-deployment --service-arn $SERVICE_ARN
-          echo "¡Despliegue disparado con éxito hacia ECR!"
 
   deploy-frontend:
     needs: [test-frontend]
