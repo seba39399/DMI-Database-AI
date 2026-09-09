@@ -85,10 +85,23 @@ jobs:
         run: |
           SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='clubnoel-backend-service'].ServiceArn" --output text)
 
-          if [ -z "$SERVICE_ARN" ] || [ "$SERVICE_ARN" == "None" ]; then
-            echo "El servicio no existe. Creándolo por primera vez en App Runner..."
+          # Si el servicio existe, verificamos su estado
+          if [ -n "$SERVICE_ARN" ] && [ "$SERVICE_ARN" != "None" ]; then
+            STATUS=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.Status" --output text)
+            echo "Servicio existente detectado con estado: $STATUS"
             
-            # Crear el servicio nuevo apuntando a la imagen en ECR y configurando variables de entorno de RDS
+            # Si está en CREATE_FAILED o OPERATION_FAILED, lo borramos para recrearlo limpio
+            if [ "$STATUS" == "CREATE_FAILED" ] || [ "$STATUS" == "OPERATION_FAILED" ]; then
+              echo "El servicio está en un estado fallido. Eliminándolo para recrearlo limpiamente..."
+              aws apprunner delete-service --service-arn $SERVICE_ARN
+              echo "Esperando a que se elimine por completo..."
+              sleep 20
+              SERVICE_ARN=""
+            fi
+          fi
+
+          if [ -z "$SERVICE_ARN" ] || [ "$SERVICE_ARN" == "None" ]; then
+            echo "Creando el servicio por primera vez en App Runner..."
             CREATE_OUTPUT=$(aws apprunner create-service \
               --service-name clubnoel-backend-service \
               --source-configuration '{
@@ -113,25 +126,21 @@ jobs:
               }' \
               --instance-configuration '{"Cpu": "1024", "Memory": "2048"}' \
               --health-check-configuration '{"Protocol": "HTTP", "Path": "/health", "Interval": 10, "Timeout": 5, "HealthyThreshold": 1, "UnhealthyThreshold": 5}')
-
+            
             SERVICE_ARN=$(echo $CREATE_OUTPUT | jq -r '.Service.ServiceArn')
             echo "¡Servicio creado exitosamente con ARN: $SERVICE_ARN!"
           else
-            echo "Servicio detectado con ARN: $SERVICE_ARN"
-            
-            # 1. Si está en estado PAUSED, reanudar
-            STATUS=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.Status" --output text)
+            # Si está pausado, lo reanudamos
             if [ "$STATUS" == "PAUSED" ]; then
               echo "El servicio está pausado. Reanudando..."
               aws apprunner resume-service --service-arn $SERVICE_ARN
             fi
 
-            # 2. Disparar el despliegue de la nueva imagen
             echo "Iniciando despliegue de la nueva imagen en App Runner..."
             aws apprunner start-deployment --service-arn $SERVICE_ARN
           fi
 
-          # 3. Esperar pacientemente a que el servicio esté en estado RUNNING
+          # Esperar a que el servicio esté en estado RUNNING
           echo "Esperando a que el servicio esté listo (RUNNING)..."
           while true; do
             CURRENT_STATUS=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.Status" --output text)
