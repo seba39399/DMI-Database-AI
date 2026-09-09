@@ -26,15 +26,15 @@ COPY pyproject.toml uv.lock* ./
 # Install dependencies directly into the Docker system environment quickly
 RUN uv pip install --system -r pyproject.toml
 
-# Copy ONLY the backend codebase into the container
+# Copy the entire backend folder contents into /app
 COPY backend/ .
 
 # Expose the port FastAPI will listen on
 EXPOSE 8000
 
-# Define the health check to validate that the container is responding correctly
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8000/api/v1/implant-cards || exit 1
+# Health check using the lightweight /health endpoint we verified in main.py
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Default command to start the production server with Uvicorn environment variables for host and port
+# Default command to start the production server
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
