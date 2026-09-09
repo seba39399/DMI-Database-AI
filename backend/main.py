@@ -7,18 +7,15 @@ from sqlmodel import Session, select
 
 from models import ImplantCard, ImplantCardCreate, ImplantCardResponse
 from classifier import predict_risk_class
-from database import create_db_and_tables, get_session
+from database import get_session
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Triggers database and tables generation safely on service startup."""
-    try:
-        create_db_and_tables()
-        print("¡Base de datos inicializada con éxito!")
-    except Exception as e:
-        print(f"Advertencia: No se pudo conectar a la BD al iniciar: {e}")
+    """Startup lifecycle: Keeps startup instant so App Runner health check passes immediately."""
+    print("Iniciando aplicación FastAPI...")
     yield
+    print("Apagando aplicación...")
 
 
 app = FastAPI(
